@@ -53,7 +53,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <h2 className="font-semibold">Recommandation automatique</h2>
           <p className="mt-2 text-sm text-slate-600">{score?.explanation ?? "Importez davantage de donnees pour enrichir la recommandation."}</p>
           <a className="mt-5 inline-flex" href={`/api/reports/generate-product?hsCode=${hsCode}`}>
-            <Button type="button">Générer rapport PDF</Button>
+            <Button type="button">Generer rapport PDF premium</Button>
           </a>
         </Card>
         <Card>
