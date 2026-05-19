@@ -189,6 +189,20 @@ async function saveDownload(download, year) {
   return filePath;
 }
 
+async function retryPortalError(page, year) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const hasPortalError = await page.evaluate(() => document.body.innerText.includes("Une erreur est survenue"));
+    if (!hasPortalError) return;
+
+    log(`Erreur portail detectee, tentative de reessai ${attempt}`);
+    const retried = await tryClick(page, ["Réessayer", "Reessayer"]);
+    if (!retried) return;
+    await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => undefined);
+    await page.waitForTimeout(10_000);
+    await saveDebug(page, year, `after-retry-${attempt}`);
+  }
+}
+
 async function downloadPortalCsv(page, year) {
   log(`Preparation de la requete ${year}`);
   await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
@@ -196,7 +210,6 @@ async function downloadPortalCsv(page, year) {
   await selectByVisibleText(page, year);
   await selectByVisibleText(page, "Valeur en MAD");
   await selectByVisibleText(page, "Annee");
-  await selectByVisibleText(page, "Mois");
   await selectByVisibleText(page, "Code du produit SH");
   await selectByVisibleText(page, "Libelle du produit SH");
   await selectByVisibleText(page, "Libelle du pays");
@@ -218,13 +231,14 @@ async function downloadPortalCsv(page, year) {
   }
 
   await saveDebug(page, year, "after-query");
+  await retryPortalError(page, year);
 
   const tableCsv = await extractTableCsv(page, year, "after-query");
   if (tableCsv) return tableCsv;
 
   const downloadPromise = page.waitForEvent("download", { timeout: 60_000 }).catch(() => null);
   const popupPromise = page.waitForEvent("popup", { timeout: 60_000 }).catch(() => null);
-  const clicked = await tryClick(page, ["Export tabulaire", "CSV", "Exporter", "Export"]);
+  const clicked = await tryClick(page, ["Export agrégé", "Export agrege", "Export tabulaire", "CSV", "Exporter", "Export"]);
   if (!clicked) throw new Error("Bouton export CSV introuvable. Le portail a probablement change de structure.");
 
   const firstResult = await Promise.race([
