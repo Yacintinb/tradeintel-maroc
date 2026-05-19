@@ -209,6 +209,50 @@ GET /api/cron/sync
 Authorization: Bearer <CRON_SECRET>
 ```
 
+## Scraping controle Office des Changes
+
+Le scraping navigateur est isole dans un worker Playwright, recommande en GitHub Actions plutot que dans Vercel Serverless.
+
+Script:
+
+```bash
+npm run scrape:office
+```
+
+Variables:
+
+```env
+APP_URL="https://tradeintel-maroc.vercel.app"
+INGEST_SECRET="secret-identique-dans-vercel-et-github"
+OFFICE_CHANGES_YEARS="2025"
+OFFICE_CHANGES_URL="https://services.oc.gov.ma/DataBase/CommerceExterieur/requete.htm"
+```
+
+Endpoint recepteur securise:
+
+```http
+POST /api/ingest/trade-flows
+Authorization: Bearer <INGEST_SECRET>
+multipart/form-data file=<csv>
+```
+
+Workflow GitHub Actions:
+
+```text
+.github/workflows/office-des-changes-scraper.yml
+```
+
+Secrets GitHub a configurer:
+
+- `APP_URL`
+- `INGEST_SECRET`
+
+Secret Vercel a configurer:
+
+- `INGEST_SECRET`
+
+Le worker ouvre le portail public Office des Changes, tente de generer un export tabulaire CSV, puis l'envoie a l'API d'ingestion. Si le portail change de structure, le job echoue avec logs plutot que d'importer des donnees douteuses.
+
 ## Fonctionnalites MVP
 
 - Auth email/mot de passe avec roles Admin/Client/Viewer.
