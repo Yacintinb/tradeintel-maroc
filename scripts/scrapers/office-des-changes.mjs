@@ -202,8 +202,21 @@ async function downloadPortalCsv(page, year) {
   await selectByVisibleText(page, "Libelle du pays");
   await selectByVisibleText(page, "Libelle du sens du flux");
 
-  await tryClick(page, ["Suivant", "Resultat", "Preparer", "Requete"]);
-  await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => undefined);
+  for (let step = 1; step <= 2; step += 1) {
+    const advanced = await tryClick(page, ["Suivant", "Resultat", "Preparer", "Requete"]);
+    if (!advanced) {
+      log(`Avancement etape ${step}: aucun bouton suivant/resultat trouve.`);
+      break;
+    }
+    log(`Avancement etape ${step}: OK`);
+    await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => undefined);
+    await page.waitForTimeout(5_000);
+    await saveDebug(page, year, `after-step-${step}`);
+
+    const stepCsv = await extractTableCsv(page, year, `after-step-${step}`);
+    if (stepCsv) return stepCsv;
+  }
+
   await saveDebug(page, year, "after-query");
 
   const tableCsv = await extractTableCsv(page, year, "after-query");
