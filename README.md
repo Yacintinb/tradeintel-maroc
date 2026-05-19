@@ -170,6 +170,45 @@ Seuils:
 - 35-49: Faible potentiel
 - 0-34: Risque
 
+## Synchronisation automatique
+
+Le projet contient une tache Vercel Cron quotidienne:
+
+```json
+{
+  "path": "/api/cron/sync",
+  "schedule": "0 3 * * *"
+}
+```
+
+Elle execute:
+
+- import automatique des `DataSource` actives de type `CSV` ou `XLSX` avec une URL;
+- remplacement des anciennes lignes de la meme source pour eviter les doublons;
+- recherche CKAN selon `CKAN_AUTO_QUERIES`;
+- synchronisation Bank Al-Maghrib si `BAM_API_URL` et `BAM_API_KEY` sont configures;
+- recalcul des scores de l'annee courante.
+
+Variables:
+
+```env
+CRON_SECRET="secret-optionnel"
+CKAN_AUTO_QUERIES="commerce exterieur,douane,import export"
+```
+
+Declenchement manuel:
+
+```http
+POST /api/admin/data-sources/sync
+```
+
+Declenchement cron securise si `CRON_SECRET` est defini:
+
+```http
+GET /api/cron/sync
+Authorization: Bearer <CRON_SECRET>
+```
+
 ## Fonctionnalites MVP
 
 - Auth email/mot de passe avec roles Admin/Client/Viewer.

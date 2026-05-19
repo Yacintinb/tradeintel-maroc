@@ -54,7 +54,11 @@ export function guessColumnMapping(headers: string[]): ColumnMapping {
 
 export async function parseImportFile(file: File): Promise<ParsedTable> {
   const buffer = Buffer.from(await file.arrayBuffer());
-  if (file.name.toLowerCase().endsWith(".csv")) {
+  return parseImportBuffer(file.name, buffer);
+}
+
+export function parseImportBuffer(fileName: string, buffer: Buffer): ParsedTable {
+  if (fileName.toLowerCase().endsWith(".csv")) {
     const result = Papa.parse<Record<string, unknown>>(buffer.toString("utf8"), {
       header: true,
       skipEmptyLines: true,

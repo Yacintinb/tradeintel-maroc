@@ -17,6 +17,12 @@ export default async function DataSourcesPage() {
         <Input name="license" placeholder="Licence" />
         <Button type="submit">Créer</Button>
       </form>
+      <form action="/api/admin/data-sources/sync" method="post" className="mb-5 rounded-md border border-slate-200 bg-white p-4">
+        <div className="mb-3 text-sm text-slate-600">
+          La synchronisation automatique importe les sources CSV/XLSX actives avec URL, met a jour CKAN/BAM si configure, puis recalcule les scores.
+        </div>
+        <Button type="submit" variant="secondary">Synchroniser maintenant</Button>
+      </form>
       <DataTable rows={sources} columns={[{ key: "name", label: "Nom" }, { key: "type", label: "Type" }, { key: "url", label: "URL" }, { key: "license", label: "Licence" }, { key: "status", label: "Statut" }, { key: "refreshFrequency", label: "Fréquence" }]} />
     </>
   );
