@@ -357,15 +357,35 @@ async function uploadToApp(filePath) {
 async function main() {
   const browser = await chromium.launch({ headless });
   const context = await browser.newContext({ acceptDownloads: true, locale: "fr-MA" });
-  const page = await context.newPage();
+  const successes = [];
+  const failures = [];
   try {
     for (const year of years) {
-      const filePath = await downloadPortalCsv(page, year);
-      const normalizedPath = await normalizeOfficeCsv(filePath, year);
-      await uploadToApp(normalizedPath);
+      const page = await context.newPage();
+      try {
+        const filePath = await downloadPortalCsv(page, year);
+        const normalizedPath = await normalizeOfficeCsv(filePath, year);
+        await uploadToApp(normalizedPath);
+        successes.push(year);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failures.push({ year, message });
+        log(`Echec annee ${year}: ${message}`);
+      } finally {
+        await page.close().catch(() => undefined);
+      }
     }
   } finally {
     await browser.close();
+  }
+
+  log(`Resume scraping: ${successes.length} succes (${successes.join(", ") || "aucun"}), ${failures.length} echec(s).`);
+  if (failures.length > 0) {
+    await fs.mkdir(outDir, { recursive: true });
+    await fs.writeFile(path.join(outDir, "failures.json"), JSON.stringify(failures, null, 2), "utf8");
+  }
+  if (successes.length === 0 && failures.length > 0) {
+    throw new Error(`Aucune annee importee. Echecs: ${failures.map((failure) => `${failure.year}: ${failure.message}`).join(" | ")}`);
   }
 }
 
