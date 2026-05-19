@@ -74,12 +74,48 @@ async function tryClick(page, labels) {
   for (const label of labels) {
     const byRole = page.getByRole("button", { name: label });
     if ((await byRole.count()) > 0) {
-      await byRole.first().click({ timeout: 10_000 });
-      return true;
+      try {
+        await byRole.first().click({ timeout: 10_000 });
+        return true;
+      } catch (error) {
+        log(`Clic role impossible (${label}): ${error instanceof Error ? error.message.split("\n")[0] : error}`);
+      }
     }
     const byText = page.getByText(label, { exact: false });
     if ((await byText.count()) > 0) {
-      await byText.first().click({ timeout: 10_000 });
+      try {
+        await byText.first().click({ timeout: 10_000 });
+        return true;
+      } catch (error) {
+        log(`Clic texte impossible (${label}): ${error instanceof Error ? error.message.split("\n")[0] : error}`);
+      }
+    }
+
+    const clickedByDom = await page.evaluate((wantedLabel) => {
+      const normalize = (value) => value.replace(/\s+/g, " ").trim().toLowerCase();
+      const wanted = normalize(wantedLabel);
+      const elements = Array.from(document.querySelectorAll("a, button, input[type='button'], input[type='submit']"));
+      const element = elements.find((item) => {
+        const text = [
+          item.textContent,
+          item.getAttribute("title"),
+          item.getAttribute("aria-label"),
+          item.getAttribute("value"),
+          item.getAttribute("id"),
+          item.getAttribute("name"),
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return normalize(text).includes(wanted);
+      });
+      if (element instanceof HTMLElement) {
+        element.click();
+        return true;
+      }
+      return false;
+    }, label);
+    if (clickedByDom) {
+      log(`Clic DOM: ${label}`);
       return true;
     }
   }
