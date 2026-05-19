@@ -53,9 +53,10 @@ export async function POST(request: NextRequest) {
     const parsed = parseImportBuffer(file.name, Buffer.from(await file.arrayBuffer()));
     const mapping = form.get("mapping") ? JSON.parse(String(form.get("mapping"))) : guessColumnMapping(parsed.headers);
     const mapped = mapTradeRows(parsed.rows, mapping);
+    const years = [...new Set(mapped.valid.map((row) => row.year))];
 
     await prisma.$transaction([
-      ...(replaceSource ? [prisma.tradeFlow.deleteMany({ where: { dataSourceId: source.id } })] : []),
+      ...(replaceSource && years.length > 0 ? [prisma.tradeFlow.deleteMany({ where: { dataSourceId: source.id, year: { in: years } } })] : []),
       prisma.tradeFlow.createMany({
         data: mapped.valid.map((row) => ({
           ...row,
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
     ]);
     const scores =
       mapped.errors.length === 0 && mapped.valid.length > 0
-        ? await recalculateOpportunityScoresForYears([...new Set(mapped.valid.map((row) => row.year))])
+        ? await recalculateOpportunityScoresForYears(years)
         : [];
 
     return NextResponse.json({

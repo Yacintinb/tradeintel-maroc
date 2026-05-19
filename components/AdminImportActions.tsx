@@ -6,7 +6,7 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type ActionState = {
-  loading: "sync" | "cleanup" | null;
+  loading: "sync" | "cleanup" | "dedupe" | null;
   message: string | null;
   error: string | null;
 };
@@ -16,7 +16,7 @@ export function AdminImportActions({ defaultYears }: { defaultYears: string }) {
   const [years, setYears] = useState(defaultYears);
   const [state, setState] = useState<ActionState>({ loading: null, message: null, error: null });
 
-  async function runAction(kind: "sync" | "cleanup") {
+  async function runAction(kind: "sync" | "cleanup" | "dedupe") {
     setState({ loading: kind, message: null, error: null });
     const response =
       kind === "sync"
@@ -25,7 +25,9 @@ export function AdminImportActions({ defaultYears }: { defaultYears: string }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ years }),
           })
-        : await fetch("/api/admin/imports?status=FAILED", { method: "DELETE" });
+        : await fetch(kind === "dedupe" ? "/api/admin/imports?dedupe=office-des-changes" : "/api/admin/imports?status=FAILED", {
+            method: "DELETE",
+          });
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
@@ -56,6 +58,10 @@ export function AdminImportActions({ defaultYears }: { defaultYears: string }) {
         <Button type="button" variant="danger" onClick={() => runAction("cleanup")} disabled={state.loading !== null}>
           <Trash2 className="h-4 w-4" />
           {state.loading === "cleanup" ? "Nettoyage..." : "Nettoyer les imports échoués"}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => runAction("dedupe")} disabled={state.loading !== null}>
+          <Trash2 className="h-4 w-4" />
+          {state.loading === "dedupe" ? "Déduplication..." : "Supprimer les doublons Office"}
         </Button>
       </div>
       {state.message ? <p className="mt-3 text-sm text-teal-700">{state.message}</p> : null}

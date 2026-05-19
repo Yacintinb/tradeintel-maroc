@@ -263,6 +263,7 @@ Depuis `/admin/imports`, un administrateur peut:
 
 - lancer le workflow GitHub Actions Office des Changes avec une ou plusieurs annees;
 - supprimer les jobs d'import `FAILED`;
+- supprimer les lignes Office des Changes dupliquees apres plusieurs relances;
 - beneficier du recalcul automatique des scores apres chaque import reussi.
 
 ## Fonctionnalites MVP

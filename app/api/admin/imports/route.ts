@@ -54,6 +54,43 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const status = request.nextUrl.searchParams.get("status");
+  const dedupe = request.nextUrl.searchParams.get("dedupe");
+  if (dedupe === "office-des-changes") {
+    const source = await prisma.dataSource.findUnique({ where: { id: "office-des-changes-scraper" } });
+    if (!source) return NextResponse.json({ deleted: 0, message: "Source Office des Changes introuvable." });
+
+    const duplicateKeys = await prisma.tradeFlow.groupBy({
+      by: ["year", "flowType", "hsCode", "productLabel", "country", "valueMad"],
+      where: { dataSourceId: source.id },
+      _count: { id: true },
+      having: { id: { _count: { gt: 1 } } },
+    });
+
+    let deleted = 0;
+    for (const key of duplicateKeys) {
+      const rows = await prisma.tradeFlow.findMany({
+        where: {
+          dataSourceId: source.id,
+          year: key.year,
+          flowType: key.flowType,
+          hsCode: key.hsCode,
+          productLabel: key.productLabel,
+          country: key.country,
+          valueMad: key.valueMad,
+        },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      const duplicateIds = rows.slice(1).map((row) => row.id);
+      if (duplicateIds.length > 0) {
+        const result = await prisma.tradeFlow.deleteMany({ where: { id: { in: duplicateIds } } });
+        deleted += result.count;
+      }
+    }
+
+    return NextResponse.json({ deleted, message: `${deleted} ligne(s) Office des Changes dupliquee(s) supprimee(s).` });
+  }
+
   if (status !== "FAILED") return NextResponse.json({ error: "Seul le nettoyage des imports FAILED est autorise." }, { status: 400 });
 
   const result = await prisma.dataIngestionJob.deleteMany({ where: { status: "FAILED" } });
