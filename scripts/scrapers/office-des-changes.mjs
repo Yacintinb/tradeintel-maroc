@@ -106,6 +106,19 @@ function csvEscape(value) {
   return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function looksLikeTradeFlowRows(rows) {
+  const text = rows
+    .slice(0, 5)
+    .flat()
+    .join(" ")
+    .toLowerCase();
+  const hasYear = /annee|année|year|202[0-9]/i.test(text);
+  const hasHsCode = /code.*(sh|hs)|produit|position/i.test(text);
+  const hasCountry = /pays|country/i.test(text);
+  const hasValue = /valeur|montant|mad/i.test(text);
+  return hasYear && hasHsCode && hasCountry && hasValue;
+}
+
 async function extractTableCsv(page, year, stage) {
   const rows = await page.evaluate(() => {
     const tables = Array.from(document.querySelectorAll("table"));
@@ -120,6 +133,10 @@ async function extractTableCsv(page, year, stage) {
   });
 
   if (rows.length < 2) return null;
+  if (!looksLikeTradeFlowRows(rows)) {
+    log(`Table ignoree (${stage}): elle ne ressemble pas a un flux import/export.`);
+    return null;
+  }
   await fs.mkdir(outDir, { recursive: true });
   const filePath = path.join(outDir, `office-des-changes-${year}-${stage}.csv`);
   await fs.writeFile(filePath, rows.map((row) => row.map(csvEscape).join(",")).join("\n"), "utf8");
@@ -183,7 +200,7 @@ async function downloadPortalCsv(page, year) {
   const afterExportCsv = await extractTableCsv(page, year, "after-export");
   if (afterExportCsv) return afterExportCsv;
 
-  throw new Error("Export introuvable apres clic. Consultez les artefacts debug HTML/PNG du workflow.");
+  throw new Error("Flux import/export introuvable apres requete/export. Consultez les artefacts debug HTML/PNG du workflow.");
 }
 
 async function uploadToApp(filePath) {
