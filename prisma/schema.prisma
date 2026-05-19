@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CLIENT
+  VIEWER
+}
+
+enum DataSourceType {
+  CSV
+  XLSX
+  REST_API
+  CKAN_API
+  MANUAL
+}
+
+enum DataSourceStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  DRAFT
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum FlowType {
+  IMPORT
+  EXPORT
+}
+
+enum Recommendation {
+  TRES_INTERESSANT
+  INTERESSANT
+  A_SURVEILLER
+  FAIBLE_POTENTIEL
+  RISQUE
+}
+
+enum MarginPotential {
+  HIGH
+  MEDIUM
+  LOW
+  UNKNOWN
+}
+
+enum RegulatoryRisk {
+  LOW
+  MEDIUM
+  HIGH
+  UNKNOWN
+}
+
+enum ReportType {
+  PRODUCT
+  SECTOR
+  EXCEL_EXPORT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+  TRIAL
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  name                String
+  email               String               @unique
+  passwordHash        String
+  role                UserRole             @default(CLIENT)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  reports             Report[]             @relation("ReportCreator")
+  clientSubscriptions ClientSubscription[]
+}
+
+model DataSource {
+  id               String             @id @default(cuid())
+  name             String
+  type             DataSourceType
+  url              String?
+  license          String?
+  refreshFrequency String?
+  status           DataSourceStatus   @default(DRAFT)
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  ingestionJobs    DataIngestionJob[]
+  tradeFlows       TradeFlow[]
+}
+
+model DataIngestionJob {
+  id           String      @id @default(cuid())
+  dataSourceId String?
+  status       JobStatus   @default(PENDING)
+  startedAt    DateTime    @default(now())
+  finishedAt   DateTime?
+  rowsImported Int         @default(0)
+  errorMessage String?
+  fileName     String?
+  fileType     String?
+  createdAt    DateTime    @default(now())
+  dataSource   DataSource? @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+}
+
+model TradeFlow {
+  id           String      @id @default(cuid())
+  year         Int
+  month        Int?
+  flowType     FlowType
+  hsCode       String
+  productLabel String
+  country      String
+  valueMad     Decimal     @db.Decimal(18, 2)
+  quantity     Decimal?    @db.Decimal(18, 3)
+  unit         String?
+  sourceFile   String?
+  dataSourceId String?
+  createdAt    DateTime    @default(now())
+  dataSource   DataSource? @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+
+  @@index([hsCode, year, flowType])
+  @@index([country])
+}
+
+model Product {
+  id              String          @id @default(cuid())
+  hsCode          String          @unique
+  name            String
+  category        String?
+  subCategory     String?
+  keywords        String[]
+  regulatoryRisk  RegulatoryRisk  @default(UNKNOWN)
+  marginPotential MarginPotential @default(UNKNOWN)
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model OpportunityScore {
+  id                     String         @id @default(cuid())
+  hsCode                 String
+  year                   Int
+  marketSizeScore        Float
+  growthScore            Float
+  stabilityScore         Float
+  supplierDiversityScore Float
+  marginScore            Float
+  regulatoryScore        Float
+  customsRiskScore       Float
+  fxRiskScore            Float
+  dataQualityScore       Float
+  finalScore             Float
+  recommendation         Recommendation
+  explanation            String
+  createdAt              DateTime       @default(now())
+
+  @@unique([hsCode, year])
+  @@index([finalScore])
+}
+
+model Report {
+  id          String     @id @default(cuid())
+  title       String
+  type        ReportType
+  sector      String?
+  hsCode      String?
+  description String?
+  fileUrl     String?
+  createdById String?
+  createdAt   DateTime   @default(now())
+  createdBy   User?      @relation("ReportCreator", fields: [createdById], references: [id], onDelete: SetNull)
+}
+
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  date      DateTime
+  currency  String
+  rateMad   Decimal  @db.Decimal(18, 6)
+  source    String
+  createdAt DateTime @default(now())
+
+  @@unique([date, currency, source])
+}
+
+model CustomsTariff {
+  id            String    @id @default(cuid())
+  hsCode10      String    @unique
+  hsCode6       String
+  description   String
+  chapter       String?
+  section       String?
+  dutyRate      Float?
+  vatRate       Float?
+  parafiscalTax Float?
+  source        String?
+  effectiveDate DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([hsCode6])
+}
+
+model MacroIndicator {
+  id            String   @id @default(cuid())
+  indicatorName String
+  period        String
+  value         Decimal  @db.Decimal(18, 4)
+  unit          String?
+  source        String
+  createdAt     DateTime @default(now())
+}
+
+model OpenDataset {
+  id           String    @id @default(cuid())
+  source       String
+  datasetId    String
+  title        String
+  description  String?
+  organization String?
+  format       String?
+  url          String?
+  lastModified DateTime?
+  importedAt   DateTime  @default(now())
+
+  @@unique([source, datasetId])
+}
+
+model SubscriptionPlan {
+  id             String               @id @default(cuid())
+  name           String               @unique
+  priceMonthly   Decimal              @db.Decimal(10, 2)
+  maxReports     Int
+  canExportExcel Boolean              @default(false)
+  canExportPdf   Boolean              @default(false)
+  canAccessApi   Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  subscriptions  ClientSubscription[]
+}
+
+model ClientSubscription {
+  id        String             @id @default(cuid())
+  userId    String
+  planId    String
+  status    SubscriptionStatus @default(TRIAL)
+  startedAt DateTime           @default(now())
+  endedAt   DateTime?
+  createdAt DateTime           @default(now())
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan      SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+}
