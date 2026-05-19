@@ -6,4 +6,5 @@ dist
 coverage
 *.log
 /reports
+scraper-output*
 *.tsbuildinfo

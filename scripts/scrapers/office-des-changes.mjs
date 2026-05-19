@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 const portalUrl = process.env.OFFICE_CHANGES_URL || "https://services.oc.gov.ma/DataBase/CommerceExterieur/requete.htm";
 const appUrl = process.env.APP_URL || "https://tradeintel-maroc.vercel.app";
 const ingestSecret = process.env.INGEST_SECRET || process.env.CRON_SECRET;
+const skipUpload = process.env.SKIP_UPLOAD === "true";
 const years = (process.env.OFFICE_CHANGES_YEARS || String(new Date().getFullYear()))
   .split(",")
   .map((year) => year.trim())
@@ -68,6 +69,24 @@ async function selectByVisibleText(page, text) {
     return true;
   }
   return false;
+}
+
+async function checkInputsById(page, ids) {
+  const checked = await page.evaluate((wantedIds) => {
+    const changed = [];
+    for (const id of wantedIds) {
+      const input = document.getElementById(id);
+      if (input instanceof HTMLInputElement) {
+        input.checked = true;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        changed.push(id);
+      }
+    }
+    return changed;
+  }, ids);
+
+  if (checked.length > 0) log(`Cases cochees DOM: ${checked.join(", ")}`);
+  return checked.length;
 }
 
 async function tryClick(page, labels) {
@@ -142,6 +161,50 @@ function csvEscape(value) {
   return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+function parseCsvLine(line) {
+  const cells = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      cells.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  cells.push(current);
+  return cells.map((cell) => cell.trim());
+}
+
+async function normalizeOfficeCsv(filePath, year) {
+  const content = await fs.readFile(filePath, "utf8");
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const rows = lines.map(parseCsvLine).filter((row) => row.length >= 5);
+  const dataRows = rows.filter((row) => /^\d{4,10}$/.test(row[0]) && row[1] && row[2] && row[3]);
+
+  if (dataRows.length === 0) return filePath;
+
+  const normalizedPath = filePath.replace(/\.csv$/i, "-normalized.csv");
+  const normalizedRows = [
+    ["Année", "Flux", "Code SH", "Désignation", "Pays", "Valeur MAD"],
+    ...dataRows.map((row) => [year, row[3], row[0], row[1], row[2], row[4] ?? "0"]),
+  ];
+
+  await fs.writeFile(normalizedPath, normalizedRows.map((row) => row.map(csvEscape).join(",")).join("\n"), "utf8");
+  log(`CSV normalise: ${normalizedPath} (${dataRows.length} lignes)`);
+  return normalizedPath;
+}
+
 function looksLikeTradeFlowRows(rows) {
   const text = rows
     .slice(0, 5)
@@ -207,13 +270,15 @@ async function downloadPortalCsv(page, year) {
   log(`Preparation de la requete ${year}`);
   await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
 
-  await selectByVisibleText(page, year);
-  await selectByVisibleText(page, "Valeur en MAD");
-  await selectByVisibleText(page, "Annee");
-  await selectByVisibleText(page, "Code du produit SH");
-  await selectByVisibleText(page, "Libelle du produit SH");
-  await selectByVisibleText(page, "Libelle du pays");
-  await selectByVisibleText(page, "Libelle du sens du flux");
+  await checkInputsById(page, [
+    `cbAnnee${year}`,
+    "cbValeurDHS",
+    "cbAnnee",
+    "cbCodeProduitSH",
+    "cbLibelleProduitSH",
+    "cbLibellePays",
+    "cbLibelleFlux",
+  ]);
 
   for (let step = 1; step <= 2; step += 1) {
     const advanced = await tryClick(page, ["Suivant", "Resultat", "Preparer", "Requete"]);
@@ -267,6 +332,10 @@ async function downloadPortalCsv(page, year) {
 }
 
 async function uploadToApp(filePath) {
+  if (skipUpload) {
+    log(`Upload ignore par SKIP_UPLOAD=true: ${filePath}`);
+    return;
+  }
   if (!ingestSecret) throw new Error("INGEST_SECRET ou CRON_SECRET manquant.");
   const bytes = await fs.readFile(filePath);
   const form = new FormData();
@@ -292,7 +361,8 @@ async function main() {
   try {
     for (const year of years) {
       const filePath = await downloadPortalCsv(page, year);
-      await uploadToApp(filePath);
+      const normalizedPath = await normalizeOfficeCsv(filePath, year);
+      await uploadToApp(normalizedPath);
     }
   } finally {
     await browser.close();
