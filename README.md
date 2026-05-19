@@ -194,6 +194,11 @@ Variables:
 ```env
 CRON_SECRET="secret-optionnel"
 CKAN_AUTO_QUERIES="commerce exterieur,douane,import export"
+GITHUB_ACTIONS_TOKEN="github_pat_avec_permission_actions_write"
+GITHUB_REPO_OWNER="Yacintinb"
+GITHUB_REPO_NAME="tradeintel-maroc"
+GITHUB_OFFICE_CHANGES_WORKFLOW="office-des-changes-scraper.yml"
+GITHUB_WORKFLOW_REF="main"
 ```
 
 Declenchement manuel:
@@ -250,8 +255,15 @@ Secrets GitHub a configurer:
 Secret Vercel a configurer:
 
 - `INGEST_SECRET`
+- `GITHUB_ACTIONS_TOKEN` pour le bouton admin `Synchroniser Office des Changes`
 
 Le worker ouvre le portail public Office des Changes, tente de generer un export tabulaire CSV, puis l'envoie a l'API d'ingestion. Si le portail change de structure, le job echoue avec logs plutot que d'importer des donnees douteuses.
+
+Depuis `/admin/imports`, un administrateur peut:
+
+- lancer le workflow GitHub Actions Office des Changes avec une ou plusieurs annees;
+- supprimer les jobs d'import `FAILED`;
+- beneficier du recalcul automatique des scores apres chaque import reussi.
 
 ## Fonctionnalites MVP
 

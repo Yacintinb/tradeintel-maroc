@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { guessColumnMapping, mapTradeRows, parseImportFile } from "@/lib/connectors/manual-import";
+import { recalculateOpportunityScoresForYears } from "@/lib/scoring/opportunity-score";
 
 export async function GET() {
   const jobs = await prisma.dataIngestionJob.findMany({ orderBy: { createdAt: "desc" }, take: 50, include: { dataSource: true } });
@@ -37,7 +38,11 @@ export async function POST(request: NextRequest) {
         errorMessage: mapped.errors.slice(0, 20).map((error) => `Ligne ${error.row}: ${error.message}`).join("\n") || null,
       },
     });
-    return NextResponse.json({ imported: mapped.valid.length, errors: mapped.errors });
+    const scores =
+      mapped.errors.length === 0 && mapped.valid.length > 0
+        ? await recalculateOpportunityScoresForYears([...new Set(mapped.valid.map((row) => row.year))])
+        : [];
+    return NextResponse.json({ imported: mapped.valid.length, errors: mapped.errors, scores });
   } catch (error) {
     await prisma.dataIngestionJob.update({
       where: { id: job.id },
@@ -45,4 +50,15 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ error: "Import echoue" }, { status: 500 });
   }
+}
+
+export async function DELETE(request: NextRequest) {
+  const status = request.nextUrl.searchParams.get("status");
+  if (status !== "FAILED") return NextResponse.json({ error: "Seul le nettoyage des imports FAILED est autorise." }, { status: 400 });
+
+  const result = await prisma.dataIngestionJob.deleteMany({ where: { status: "FAILED" } });
+  return NextResponse.json({
+    deleted: result.count,
+    message: `${result.count} import(s) echoue(s) supprime(s).`,
+  });
 }

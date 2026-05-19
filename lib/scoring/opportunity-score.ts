@@ -125,3 +125,12 @@ export async function recalculateAllOpportunityScores(year = new Date().getFullY
   }
   return { count, year };
 }
+
+export async function recalculateOpportunityScoresForYears(years: number[]) {
+  const uniqueYears = [...new Set(years)].filter((year) => Number.isInteger(year)).sort((a, b) => a - b);
+  const results = [];
+  for (const year of uniqueYears) {
+    results.push(await recalculateAllOpportunityScores(year));
+  }
+  return results;
+}

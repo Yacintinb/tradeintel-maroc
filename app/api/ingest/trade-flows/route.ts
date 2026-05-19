@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { guessColumnMapping, mapTradeRows, parseImportBuffer } from "@/lib/connectors/manual-import";
+import { recalculateOpportunityScoresForYears } from "@/lib/scoring/opportunity-score";
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.INGEST_SECRET || process.env.CRON_SECRET;
@@ -72,11 +73,16 @@ export async function POST(request: NextRequest) {
         },
       }),
     ]);
+    const scores =
+      mapped.errors.length === 0 && mapped.valid.length > 0
+        ? await recalculateOpportunityScoresForYears([...new Set(mapped.valid.map((row) => row.year))])
+        : [];
 
     return NextResponse.json({
       sourceId: source.id,
       imported: mapped.valid.length,
       errors: mapped.errors,
+      scores,
     });
   } catch (error) {
     await prisma.dataIngestionJob.update({
