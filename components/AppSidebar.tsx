@@ -1,11 +1,23 @@
 import Link from "next/link";
-import { BarChart3, Database, FileSpreadsheet, Gauge, Home, PackageSearch, Settings, Upload, WalletCards } from "lucide-react";
+import {
+  BarChart3,
+  Calculator,
+  Database,
+  FileSpreadsheet,
+  Gauge,
+  Home,
+  PackageSearch,
+  Settings,
+  Upload,
+  WalletCards,
+} from "lucide-react";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/products", label: "Produits", icon: PackageSearch },
-  { href: "/opportunities", label: "Opportunités", icon: Gauge },
+  { href: "/opportunities", label: "Opportunites", icon: Gauge },
   { href: "/reports", label: "Rapports", icon: FileSpreadsheet },
+  { href: "/tools/landed-cost", label: "Calculateur cout", icon: Calculator },
   { href: "/admin/imports", label: "Imports", icon: Upload },
   { href: "/admin/data-sources", label: "Sources", icon: Database },
   { href: "/admin/open-datasets", label: "Open datasets", icon: BarChart3 },
@@ -13,7 +25,7 @@ const links = [
   { href: "/admin/exchange-rates", label: "Taux de change", icon: WalletCards },
   { href: "/admin/macro-indicators", label: "Macro HCP", icon: BarChart3 },
   { href: "/admin/scores", label: "Scores", icon: Gauge },
-  { href: "/admin/settings", label: "Paramètres", icon: Settings },
+  { href: "/admin/settings", label: "Parametres", icon: Settings },
 ];
 
 export function AppSidebar() {
