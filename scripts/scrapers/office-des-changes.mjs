@@ -86,33 +86,104 @@ async function tryClick(page, labels) {
   return false;
 }
 
-async function downloadPortalCsv(page, year) {
-  log(`Preparation de la requete ${year}`);
-  await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+async function saveDebug(page, year, stage) {
+  await fs.mkdir(outDir, { recursive: true });
+  const prefix = path.join(outDir, `debug-${year}-${stage}`);
+  try {
+    await page.screenshot({ path: `${prefix}.png`, fullPage: true });
+  } catch (error) {
+    log(`Screenshot debug impossible (${stage}): ${error instanceof Error ? error.message : error}`);
+  }
+  try {
+    await fs.writeFile(`${prefix}.html`, await page.content(), "utf8");
+  } catch (error) {
+    log(`HTML debug impossible (${stage}): ${error instanceof Error ? error.message : error}`);
+  }
+}
 
-  await selectByVisibleText(page, year);
-  await selectByVisibleText(page, "Valeur en MAD");
-  await selectByVisibleText(page, "Année");
-  await selectByVisibleText(page, "Mois");
-  await selectByVisibleText(page, "Code du produit SH");
-  await selectByVisibleText(page, "Libellé du produit SH");
-  await selectByVisibleText(page, "Libellé du pays");
-  await selectByVisibleText(page, "Libellé du sens du flux");
+function csvEscape(value) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  return /[",\n;]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
 
-  await tryClick(page, ["Suivant", "Résultat", "Resultat", "Préparer", "Requête"]);
-  await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => undefined);
+async function extractTableCsv(page, year, stage) {
+  const rows = await page.evaluate(() => {
+    const tables = Array.from(document.querySelectorAll("table"));
+    const table = tables
+      .map((item) => ({
+        rows: Array.from(item.querySelectorAll("tr")).map((row) =>
+          Array.from(row.querySelectorAll("th,td")).map((cell) => (cell.textContent || "").replace(/\s+/g, " ").trim()),
+        ),
+      }))
+      .sort((a, b) => b.rows.length - a.rows.length)[0];
+    return table?.rows.filter((row) => row.some(Boolean)) ?? [];
+  });
 
-  const downloadPromise = page.waitForEvent("download", { timeout: 120_000 });
-  const clicked = await tryClick(page, ["Export tabulaire", "CSV", "Exporter", "Export"]);
-  if (!clicked) throw new Error("Bouton export CSV introuvable. Le portail a probablement change de structure.");
-  const download = await downloadPromise;
+  if (rows.length < 2) return null;
+  await fs.mkdir(outDir, { recursive: true });
+  const filePath = path.join(outDir, `office-des-changes-${year}-${stage}.csv`);
+  await fs.writeFile(filePath, rows.map((row) => row.map(csvEscape).join(",")).join("\n"), "utf8");
+  log(`Table extraite en CSV: ${filePath}`);
+  return filePath;
+}
 
+async function saveDownload(download, year) {
   await fs.mkdir(outDir, { recursive: true });
   const suggested = download.suggestedFilename();
   const filePath = path.join(outDir, suggested || `office-des-changes-${year}.csv`);
   await download.saveAs(filePath);
   log(`CSV telecharge: ${filePath}`);
   return filePath;
+}
+
+async function downloadPortalCsv(page, year) {
+  log(`Preparation de la requete ${year}`);
+  await page.goto(portalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+
+  await selectByVisibleText(page, year);
+  await selectByVisibleText(page, "Valeur en MAD");
+  await selectByVisibleText(page, "Annee");
+  await selectByVisibleText(page, "Mois");
+  await selectByVisibleText(page, "Code du produit SH");
+  await selectByVisibleText(page, "Libelle du produit SH");
+  await selectByVisibleText(page, "Libelle du pays");
+  await selectByVisibleText(page, "Libelle du sens du flux");
+
+  await tryClick(page, ["Suivant", "Resultat", "Preparer", "Requete"]);
+  await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => undefined);
+  await saveDebug(page, year, "after-query");
+
+  const tableCsv = await extractTableCsv(page, year, "after-query");
+  if (tableCsv) return tableCsv;
+
+  const downloadPromise = page.waitForEvent("download", { timeout: 60_000 }).catch(() => null);
+  const popupPromise = page.waitForEvent("popup", { timeout: 60_000 }).catch(() => null);
+  const clicked = await tryClick(page, ["Export tabulaire", "CSV", "Exporter", "Export"]);
+  if (!clicked) throw new Error("Bouton export CSV introuvable. Le portail a probablement change de structure.");
+
+  const firstResult = await Promise.race([
+    downloadPromise.then((download) => ({ type: "download", value: download })),
+    popupPromise.then((popup) => ({ type: "popup", value: popup })),
+    page.waitForLoadState("networkidle", { timeout: 60_000 }).then(() => ({ type: "navigation", value: page })).catch(() => ({ type: "timeout", value: null })),
+  ]);
+
+  if (firstResult.type === "download" && firstResult.value) return saveDownload(firstResult.value, year);
+
+  if (firstResult.type === "popup" && firstResult.value) {
+    const popup = firstResult.value;
+    await popup.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => undefined);
+    await saveDebug(popup, year, "popup");
+    const popupCsv = await extractTableCsv(popup, year, "popup");
+    if (popupCsv) return popupCsv;
+    const popupDownload = await popup.waitForEvent("download", { timeout: 10_000 }).catch(() => null);
+    if (popupDownload) return saveDownload(popupDownload, year);
+  }
+
+  await saveDebug(page, year, "after-export");
+  const afterExportCsv = await extractTableCsv(page, year, "after-export");
+  if (afterExportCsv) return afterExportCsv;
+
+  throw new Error("Export introuvable apres clic. Consultez les artefacts debug HTML/PNG du workflow.");
 }
 
 async function uploadToApp(filePath) {

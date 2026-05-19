@@ -28,3 +28,10 @@ jobs:
           INGEST_SECRET: ${{ secrets.INGEST_SECRET }}
           OFFICE_CHANGES_YEARS: ${{ github.event.inputs.years || vars.OFFICE_CHANGES_YEARS || '2025' }}
         run: node scripts/scrapers/office-des-changes.mjs
+      - name: Upload scraper debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: office-des-changes-scraper-output
+          path: scraper-output
+          if-no-files-found: ignore
