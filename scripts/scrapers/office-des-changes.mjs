@@ -217,7 +217,7 @@ async function downloadPortalCsv(page, year) {
   const firstResult = await Promise.race([
     downloadPromise.then((download) => ({ type: "download", value: download })),
     popupPromise.then((popup) => ({ type: "popup", value: popup })),
-    page.waitForLoadState("networkidle", { timeout: 60_000 }).then(() => ({ type: "navigation", value: page })).catch(() => ({ type: "timeout", value: null })),
+    new Promise((resolve) => setTimeout(() => resolve({ type: "timeout", value: null }), 45_000)),
   ]);
 
   if (firstResult.type === "download" && firstResult.value) return saveDownload(firstResult.value, year);
