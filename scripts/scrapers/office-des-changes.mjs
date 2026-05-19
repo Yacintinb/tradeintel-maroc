@@ -17,6 +17,51 @@ function log(message) {
 }
 
 async function selectByVisibleText(page, text) {
+  const selectedByDom = await page.evaluate((wantedText) => {
+    const normalize = (value) => value.replace(/\s+/g, " ").trim().toLowerCase();
+    const wanted = normalize(wantedText);
+
+    const options = Array.from(document.querySelectorAll("option"));
+    const option = options.find((item) => normalize(item.textContent || "").includes(wanted));
+    if (option instanceof HTMLOptionElement && option.parentElement instanceof HTMLSelectElement) {
+      option.selected = true;
+      option.parentElement.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+
+    const labels = Array.from(document.querySelectorAll("label"));
+    const label = labels.find((item) => normalize(item.textContent || "").includes(wanted));
+    if (label instanceof HTMLLabelElement) {
+      const target = label.htmlFor ? document.getElementById(label.htmlFor) : label.querySelector("input, select, textarea");
+      if (target instanceof HTMLInputElement) {
+        if (target.type === "checkbox" || target.type === "radio") target.checked = true;
+        target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+      if (target instanceof HTMLSelectElement) {
+        target.dispatchEvent(new Event("change", { bubbles: true }));
+        return true;
+      }
+    }
+
+    const inputs = Array.from(document.querySelectorAll("input"));
+    const input = inputs.find((item) => normalize(item.value || item.name || item.id || "").includes(wanted));
+    if (input instanceof HTMLInputElement) {
+      if (input.type === "checkbox" || input.type === "radio") input.checked = true;
+      input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+
+    return false;
+  }, text);
+
+  if (selectedByDom) {
+    log(`Selection DOM: ${text}`);
+    return true;
+  }
+
   const option = page.getByText(text, { exact: true });
   if ((await option.count()) > 0) {
     await option.first().click({ timeout: 10_000 });
