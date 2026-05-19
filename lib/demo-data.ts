@@ -70,5 +70,8 @@ export function demoDashboardKpis() {
 }
 
 export function isDatabaseUnavailable(error: unknown) {
-  return error instanceof Error && /Can't reach database server|P1001|ECONNREFUSED/i.test(error.message);
+  if (!(error instanceof Error)) return false;
+  return /Can't reach database server|P1001|P1000|P2021|ECONNREFUSED|Environment variable not found|Invalid `.*prisma.*` invocation|Invalid `.*Prisma.*` invocation|does not exist|connection|database/i.test(
+    error.message,
+  );
 }

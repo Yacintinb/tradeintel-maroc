@@ -30,7 +30,11 @@ export const authOptions: NextAuthOptions = {
           if (!valid) return null;
           return { id: user.id, name: user.name, email: user.email, role: user.role };
         } catch (error) {
-          if (!isDatabaseUnavailable(error)) throw error;
+          if (!isDatabaseUnavailable(error)) {
+            console.error("Auth database error", error);
+            return null;
+          }
+          console.error("Auth database unavailable, using preview credentials", error);
           if (parsed.data.email === "admin@tradeintel.ma" && parsed.data.password === "admin123") {
             return { id: "preview-admin", name: "Admin Preview", email: parsed.data.email, role: "ADMIN" };
           }
