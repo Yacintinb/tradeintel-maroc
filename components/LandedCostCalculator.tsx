@@ -34,11 +34,13 @@ function percent(value: number) {
 export function LandedCostCalculator({
   tariffs,
   exchangeRates,
+  initialHsCode,
 }: {
   tariffs: TariffOption[];
   exchangeRates: ExchangeOption[];
+  initialHsCode?: string;
 }) {
-  const [hsCode, setHsCode] = useState(tariffs[0]?.hsCode ?? "");
+  const [hsCode, setHsCode] = useState(initialHsCode && tariffs.some((item) => item.hsCode === initialHsCode) ? initialHsCode : tariffs[0]?.hsCode ?? "");
   const [currency, setCurrency] = useState(exchangeRates[0]?.currency ?? "EUR");
   const [goodsValue, setGoodsValue] = useState("10000");
   const [quantity, setQuantity] = useState("100");
@@ -65,6 +67,22 @@ export function LandedCostCalculator({
     const sellingPrice = unitCost / Math.max(1 - numberValue(targetMargin) / 100, 0.01);
     return { goodsMad, freightMad, insuranceMad, cif, duty, parafiscal, vat, otherFeesMad, total, unitCost, sellingPrice };
   }, [freight, goodsValue, insurance, otherFees, quantity, selectedRate, selectedTariff, targetMargin]);
+
+  const pdfParams = new URLSearchParams({
+    hsCode,
+    description: selectedTariff?.description ?? "Produit",
+    currency,
+    exchangeRate: String(selectedRate),
+    goodsValue: String(numberValue(goodsValue)),
+    quantity: String(numberValue(quantity)),
+    freight: String(numberValue(freight)),
+    insurance: String(numberValue(insurance)),
+    otherFeesMad: String(numberValue(otherFees)),
+    dutyRate: String(selectedTariff?.dutyRate ?? 0),
+    vatRate: String(selectedTariff?.vatRate ?? 0),
+    parafiscalTax: String(selectedTariff?.parafiscalTax ?? 0),
+    targetMargin: String(numberValue(targetMargin)),
+  });
 
   return (
     <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
@@ -148,7 +166,9 @@ export function LandedCostCalculator({
             Prix de vente cible avec {percent(numberValue(targetMargin))}% de marge : <strong>{money(result.sellingPrice)}</strong> / unité.
           </div>
         </div>
-        <Button type="button" className="mt-4 w-full">Exporter le calcul bientôt</Button>
+        <a className="mt-4 block" href={`/api/reports/generate-landed-cost?${pdfParams.toString()}`}>
+          <Button type="button" className="w-full">Exporter le calcul PDF</Button>
+        </a>
       </div>
     </div>
   );

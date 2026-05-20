@@ -52,9 +52,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
           <h2 className="font-semibold">Recommandation automatique</h2>
           <p className="mt-2 text-sm text-slate-600">{score?.explanation ?? "Importez davantage de donnees pour enrichir la recommandation."}</p>
-          <a className="mt-5 inline-flex" href={`/api/reports/generate-product?hsCode=${hsCode}`}>
-            <Button type="button">Generer rapport PDF premium</Button>
-          </a>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <a className="inline-flex" href={`/api/reports/generate-product?hsCode=${hsCode}`}>
+              <Button type="button">Generer rapport PDF premium</Button>
+            </a>
+            <a className="inline-flex" href={`/tools/landed-cost?hsCode=${hsCode}`}>
+              <Button type="button" variant="outline">Calculer cout debarque</Button>
+            </a>
+          </div>
         </Card>
         <Card>
           <h2 className="font-semibold">Risques douaniers</h2>

@@ -2,7 +2,8 @@ import { Header } from "@/components/Header";
 import { LandedCostCalculator } from "@/components/LandedCostCalculator";
 import { prisma } from "@/lib/prisma";
 
-export default async function LandedCostPage() {
+export default async function LandedCostPage({ searchParams }: { searchParams: Promise<{ hsCode?: string }> }) {
+  const { hsCode } = await searchParams;
   const [tariffs, exchangeRates] = await Promise.all([
     prisma.customsTariff.findMany({ orderBy: [{ hsCode6: "asc" }], take: 200 }),
     prisma.exchangeRate.findMany({ orderBy: [{ date: "desc" }], take: 50 }),
@@ -38,7 +39,7 @@ export default async function LandedCostPage() {
   return (
     <>
       <Header title="Calculateur coût total débarqué" subtitle="Estimez le coût réel rendu Maroc à partir des droits, TVA, fret, assurance et taux de change." />
-      <LandedCostCalculator tariffs={tariffOptions} exchangeRates={exchangeOptions} />
+      <LandedCostCalculator tariffs={tariffOptions} exchangeRates={exchangeOptions} initialHsCode={hsCode} />
     </>
   );
 }

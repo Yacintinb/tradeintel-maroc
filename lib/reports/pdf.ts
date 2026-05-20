@@ -154,3 +154,74 @@ export async function generateSectorPdf(sector: string) {
   doc.end();
   return done;
 }
+
+export type LandedCostPdfInput = {
+  hsCode: string;
+  description: string;
+  currency: string;
+  exchangeRate: number;
+  goodsValue: number;
+  quantity: number;
+  freight: number;
+  insurance: number;
+  otherFeesMad: number;
+  dutyRate: number;
+  vatRate: number;
+  parafiscalTax: number;
+  targetMargin: number;
+};
+
+export async function generateLandedCostPdf(input: LandedCostPdfInput) {
+  const goodsMad = input.goodsValue * input.exchangeRate;
+  const freightMad = input.freight * input.exchangeRate;
+  const insuranceMad = input.insurance * input.exchangeRate;
+  const cif = goodsMad + freightMad + insuranceMad;
+  const duty = cif * (input.dutyRate / 100);
+  const parafiscal = cif * (input.parafiscalTax / 100);
+  const taxableBase = cif + duty + parafiscal;
+  const vat = taxableBase * (input.vatRate / 100);
+  const total = cif + duty + parafiscal + vat + input.otherFeesMad;
+  const unitCost = total / Math.max(input.quantity, 1);
+  const sellingPrice = unitCost / Math.max(1 - input.targetMargin / 100, 0.01);
+
+  const doc = new PDFDocument({ size: "A4", margin: 48 });
+  const done = collectPdf(doc);
+
+  title(doc, "TradeIntel Maroc - Calcul cout total debarque", `${input.description || input.hsCode} | Code SH ${input.hsCode} | ${new Date().toLocaleDateString("fr-MA")}`);
+
+  section(doc, "Hypotheses");
+  keyValue(doc, "Devise facture:", input.currency);
+  keyValue(doc, "Taux de change MAD:", input.exchangeRate.toFixed(4));
+  keyValue(doc, "Valeur marchandise:", `${input.goodsValue.toLocaleString("fr-MA")} ${input.currency}`);
+  keyValue(doc, "Quantite:", input.quantity.toLocaleString("fr-MA"));
+  keyValue(doc, "Fret:", `${input.freight.toLocaleString("fr-MA")} ${input.currency}`);
+  keyValue(doc, "Assurance:", `${input.insurance.toLocaleString("fr-MA")} ${input.currency}`);
+
+  section(doc, "Taxes et droits");
+  keyValue(doc, "Droit de douane:", `${input.dutyRate.toFixed(2)}%`);
+  keyValue(doc, "TVA:", `${input.vatRate.toFixed(2)}%`);
+  keyValue(doc, "Taxe parafiscale:", `${input.parafiscalTax.toFixed(2)}%`);
+
+  section(doc, "Resultat du calcul");
+  keyValue(doc, "Valeur marchandise MAD:", formatMad(goodsMad));
+  keyValue(doc, "Base CIF:", formatMad(cif));
+  keyValue(doc, "Droits de douane:", formatMad(duty));
+  keyValue(doc, "Taxe parafiscale:", formatMad(parafiscal));
+  keyValue(doc, "TVA:", formatMad(vat));
+  keyValue(doc, "Autres frais MAD:", formatMad(input.otherFeesMad));
+  keyValue(doc, "Cout total rendu Maroc:", formatMad(total));
+  keyValue(doc, "Cout unitaire rendu Maroc:", formatMad(unitCost));
+  keyValue(doc, `Prix de vente cible (${input.targetMargin.toFixed(1)}% marge):`, formatMad(sellingPrice));
+
+  section(doc, "Lecture commerciale");
+  bullet(doc, "Ce calcul permet de verifier rapidement si le produit conserve une marge apres droits, TVA, fret et assurance.");
+  bullet(doc, "A comparer avec les prix de vente locaux, les delais fournisseurs et le risque de change avant commande.");
+  bullet(doc, "Les taux douaniers doivent etre confirmes avec la nomenclature et le transitaire avant decision finale.");
+
+  section(doc, "Limites");
+  bullet(doc, "Simulation indicative basee sur les valeurs saisies dans TradeIntel Maroc.");
+  bullet(doc, "Ne remplace pas une cotation officielle douane, transitaire ou commissionnaire agree.");
+
+  doc.end();
+  return done;
+}
